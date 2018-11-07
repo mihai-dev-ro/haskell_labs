@@ -9,8 +9,10 @@ import Data.Maybe (isJust)
 internal :: String -> Expression
 internal = maybe (error "Syntax error!") head . parseProgram
 
+{-|
 makeContext :: [(String, String)] -> Context
 makeContext = M.fromList . map (fmap internal)
+-}
 
 makeTContext :: [(String, String)] -> TypingContext
 makeTContext = M.fromList . map (fmap read)
