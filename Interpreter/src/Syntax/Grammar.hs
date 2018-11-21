@@ -30,7 +30,7 @@ lineEnding = many (spot isSpace)
     Parse one line until the 
 -}
 oneLine :: Parser Expression
-oneLine = (definition <|> application) <* lineEnding
+oneLine = (definition <|> anyLambdaExpression) <* lineEnding
 
 {-|
     Any alphanumeric character + '#' + '''

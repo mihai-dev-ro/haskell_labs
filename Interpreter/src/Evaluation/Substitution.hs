@@ -9,13 +9,17 @@ import qualified Data.Set as Set
     Returns the list of free variables in an expression.
 -}
 freeVars :: Expression -> [String]
-freeVars (Var { varName = x }) = [x]
-freeVars (Lambda { lambdaArg = x, lambdaBody = e }) = 
+
+freeVars (Var x) = [x]
+
+freeVars (Lambda x e) = 
     Set.toList $ Set.difference (Set.fromList $ freeVars e) (Set.fromList [x])
-freeVars (Application { appExpr = e, appArg = a }) = 
+
+freeVars (Application e a) = 
     Set.toList $ Set.union (Set.fromList $ freeVars e) $
         (Set.fromList $ freeVars a)
-freeVars (Definition { defName = name, defExpr = e }) = freeVars e
+
+freeVars (Definition name e) = freeVars e
 
 {-|
     Performs the substitution of the free occurrences of a variable within
@@ -25,25 +29,26 @@ subst :: String      -- ^ Variable
       -> Expression  -- ^ New expression
       -> Expression  -- ^ Existing expression
       -> Expression  -- ^ Resulting expression
-subst x e existingExpr@(Var { varName = y })
+
+subst x e existingExpr@(Var y)
     | y == x = e
     | y /= x = existingExpr
 
-subst x e' existingExpr@(Lambda { lambdaArg = y, lambdaBody = e }) 
+subst x e' existingExpr@(Lambda y e) 
     | y == x                       = existingExpr
-    | not (y `elem` (freeVars e')) = Lambda { lambdaArg = y, lambdaBody = subst x e' e}
+    | not (y `elem` (freeVars e')) = Lambda { argName = y, body = subst x e' e}
     | otherwise = 
         let findZ y = if ((y ++ "#") `elem` ((freeVars e) ++ (freeVars e'))) 
                       then findZ (y ++ "#") 
                       else (y ++ "#") 
         in
-            (\z -> Lambda { lambdaArg = z, lambdaBody = subst x e' e }) $ (findZ y)
+            (\z -> Lambda { argName = z, body = subst x e' (subst y (Var z) e) }) $ (findZ y)
 
-subst x e' (Application { appExpr = e, appArg = a }) = 
-    Application { appExpr = subst x e' e, appArg = subst x e' a}
+subst x e' (Application e a) = 
+    Application { expr = subst x e' e, arg = subst x e' a}
 
-subst x e' (Definition { defName = name, defExpr = e }) =
-    Definition { defName = name, defExpr = subst x e' e }    
+subst x e' (Definition name e) =
+    Definition { name = name, expr = subst x e' e }    
 
 {-|
 	Testing purposes
@@ -56,7 +61,7 @@ testTreeVars = (\(Just (e, "")) -> freeVars e) <$>
 
 testSubstVar = 
     let
-        newExpr = Var { varName = "y" }
+        newExpr = Var { name = "y" }
         existingExpr = (
                         (\(Just (e, _)) -> e) <$> 
                         (runParser $ anyLambdaExpression) <$> 
@@ -69,11 +74,11 @@ testSubstVar =
 testSubstLambda = 
     let 
         newExpr = (\(Just (e, _)) -> e) $ 
-                  (runParser anyLambdaExpression "((x y) z)")
+                  (runParser anyLambdaExpression "z")
         existingExpr = (
                         (\(Just (e, _)) -> e) <$> 
                         (runParser $ anyLambdaExpression) <$> 
-                        ["x", "\\z.\\z.x", "t"]
+                        ["\\x.x"]
                        )
     in  
         subst "x" newExpr <$> existingExpr
