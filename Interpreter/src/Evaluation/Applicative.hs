@@ -15,46 +15,45 @@ eval :: Expression             -- ^ Expression to be evaluated
   -> (Expression, Context)  -- ^ Evaluation result, together with a possibly
                  --   enriched context, in case of definition
 
+{-
 eval def@(Definition name e) context = (e, M.insert name e context)
 
 eval var@(Var x) context = (M.findWithDefault var x context, context)
 
 eval lambda@(Lambda x e) context = (lambda, context)
 
-eval (Application var@(Var x) a) context = 
-  let evalVar = fst $ (eval var context)
-  in ((Application evalVar a), context)
-eval (Application lambdaE@(Lambda x e) a) context = case a of
-  lambdaA@(Lambda x' e')  -> (subst x lambdaA e, context)
-  var@(Var x)             -> (subst x var e, context)
-  app@(Application e' a') -> ((Application lambdaE (fst $ eval app context)), context)
-eval e context = (e, context)
+eval app@(Application lambdaE@(Lambda x e) a) context = case a of
+  Lambda x' e'  -> (subst x a e, context)
+  _             -> 
+    let evalA = fst $ eval a context 
+    in  ((Application lambdaE evalA), context) 
 
+eval app@(Application e a) context = 
+  let evalE = fst $ eval e context
+  in ((Application evalE a), context)
+-}
+
+
+eval = runState . evalM
 
 type Eval = State Context
 evalM :: Expression -> Eval Expression
 
-evalM def@(Definition name e) = state $ \s -> (e, M.insert name e s)
+evalM def@(Definition name e) = do
+  context <- get
+  modify $ M.insert name e
+  return e
 
 evalM var@(Var x) = do
-  context <- get
-  case M.lookup x context of
-    Nothing -> do
-      modify $ M.insert x var
-      return var
-    Just result -> return result
+  evalX <- gets $ M.findWithDefault var x
+  return evalX
 
 evalM lambda@(Lambda x e) = return lambda
 
-evalM (Application var@(Var x) a) = do
-  evalVar <- evalM var
-  return (Application evalVar a)
-
 evalM (Application lambdaE@(Lambda x e) a) = case a of
-  lambdaA@(Lambda x' e')  -> return (subst x lambdaA e)
-  var@(Var x)             -> return (subst x var e)
-  app@(Application e' a') -> do
-    evalApp <- evalM app
-    return (Application lambdaE evalApp)
-
-evalM e = return e
+  Lambda x' e' -> return (subst x a e)
+  _ -> evalM a >>= return . Application lambdaE
+    
+evalM (Application e a) = do
+  evalE <- evalM e 
+  return (Application evalE a)

@@ -13,6 +13,7 @@ eval :: Expression             -- ^ Expression to be evaluated
    -> Context                -- ^ Context where the evaluation takes place
    -> (Expression, Context)  -- ^ Evaluation result, together with a possibly
                  --   enriched context, in case of definition
+{-
 eval def@(Definition name e) context = (e, M.insert name e context)
 
 eval var@(Var x) context = (M.findWithDefault var x context, context)
@@ -20,32 +21,29 @@ eval var@(Var x) context = (M.findWithDefault var x context, context)
 eval lambda@(Lambda x e) context = (lambda, context)
 
 eval app@(Application e a) context = case e of                                        
-                    Var x       -> 
-                      let evalVar = fst $ (eval e context)
-                      in ((Application evalVar a), context)
                     Lambda x e' -> (subst x a e', context)
-                    _           -> (app, context)
+                    _           -> let evalVar = fst $ (eval e context)
+                                   in ((Application evalVar a), context)
+-}
 
+eval = runState . evalM
 
 type Eval = State Context
 evalM :: Expression -> Eval Expression
 
-evalM def@(Definition name e) = state $ \s -> (e, M.insert name e s)
+evalM def@(Definition name e) = do
+  context <- get
+  modify $ M.insert name e
+  return e
 
 evalM var@(Var x) = do
-  context <- get
-  case M.lookup x context of
-    Nothing -> do
-      modify $ M.insert x var
-      return var
-    Just result -> return result
+  evalX <- gets $ M.findWithDefault var x
+  return evalX
 
 evalM lambda@(Lambda x e) = return lambda
 
 evalM app@(Application e a) = case e of
-  Var x       -> do
-    evalVar <- evalM e
-    return (Application evalVar a)
   Lambda x e' -> return (subst x a e')
-  _           -> return app
-    
+  _           -> do
+    evalVar <- evalM e
+    return (Application evalVar a)  

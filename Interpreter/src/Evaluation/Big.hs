@@ -2,7 +2,11 @@ module Evaluation.Big where
 
 import Syntax.Expression
 import qualified Data.Map as M
+import qualified Data.List as L
 import Evaluation.Normal
+import Data.Tuple
+
+import Control.Monad.State
 
 {-|
     Big-step evaluation of a given expression, within a given context.
@@ -18,25 +22,29 @@ evalBig :: (Expression -> Context -> (Expression, Context))  -- ^ Small-stepper
                                   --   together with a possibly enriched context
                                   --   in case of definition
 
-evalBig smallStepper var@(Var x) context = case M.lookup x context of 
-                                            Nothing -> (var, context)
-                                            Just e'  -> evalBig smallStepper e' context
-
-evalBig smallStepper lambda@(Lambda x e) context = (lambda, context)
-
+{-
 evalBig smallStepper def@(Definition name e) context = smallStepper def context
 
-evalBig smallStepper app@(Application e a) context = case e of 
-  eVar@(Var x') -> case M.lookup x' context of 
-                    Nothing -> (app, context)
-                    Just e' -> evalBig smallStepper (Application e' a) context
-  eLambda@(Lambda x' e')      -> 
-    let (appEval, contextEval) = smallStepper app context
-    in evalBig smallStepper appEval contextEval
-  
-  eApp@(Application e' a') -> 
-    let (eApp', context') = smallStepper eApp context
-    in evalBig smallStepper (Application eApp' a) context'
+evalBig smallStepper e context =
+  let e' = fst $ smallStepper e context
+  in if e == e' 
+      then (e, context)
+      else evalBig smallStepper e' context 
+-}
+
+evalBig smallStepper e = runState $ evalBigM smallStepper e
+
+
+evalBigM :: (Expression -> Context -> (Expression, Context))
+         -> Expression
+         -> Eval Expression
+evalBigM smallStepper e = do
+  context <- get
+  (e', context') <- return $ smallStepper e context
+  put context'
+  if e == e'
+    then return e
+    else evalBigM smallStepper e'
 
                         
 {-|
@@ -50,17 +58,18 @@ evalList :: (Expression -> Context -> (Expression, Context))
          -> [Expression]
          -> Context
          -> ([Expression], Context)
-evalList smallStepper exprList context =
+
+{-}
+evalList smallStepper es context = 
   let 
-    foldlFn (es, esContext) e =  mergeExprTuples (evalBig smallStepper e esContext) (es, esContext) 
-  in applyToFirst reverse $ foldl foldlFn ([], context) exprList
-
-
-mergeExprTuples :: (a,b) -> ([a],b) -> ([a], b)
-mergeExprTuples (x,y) (xs,_) = (x:xs, y) 
-
-{-|
-    Applies a function to the first component of a pair.
+    fnAcc context e = swap $ evalBig smallStepper e context
+  in 
+    swap $ L.mapAccumL fnAcc context es 
 -}
-applyToFirst :: (a -> b) -> (a, c) -> (b, c)
-applyToFirst f (x, y) = (f x, y)
+
+evalList smallStepper es = runState $ evalListM smallStepper es
+
+evalListM :: (Expression -> Context -> (Expression, Context))
+          -> [Expression]
+          -> Eval [Expression]
+evalListM smallStepper es = mapM (evalBigM smallStepper) es
