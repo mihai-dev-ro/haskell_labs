@@ -5,8 +5,11 @@ import qualified Data.Map as M
 import qualified Data.List as L
 import Evaluation.Normal
 import Data.Tuple
+import Data.Either
 
 import Control.Monad.State
+import Control.Monad.Identity
+import Control.Monad.Except
 
 {-|
     Big-step evaluation of a given expression, within a given context.
@@ -32,16 +35,18 @@ evalBig smallStepper e context =
       else evalBig smallStepper e' context 
 -}
 
-evalBig smallStepper e = runState $ evalBigM smallStepper e
+evalBig smallStepper e = 
+  let 
+    smallStepperM = lift . state . smallStepper
+    evalBig' e = runState $ runExceptT (evalBigM smallStepperM e)
+  in
+    applyToFirst (fromRight e) . evalBig' e
 
-
-evalBigM :: (Expression -> Context -> (Expression, Context))
+evalBigM :: (Expression -> Eval Expression)
          -> Expression
          -> Eval Expression
 evalBigM smallStepper e = do
-  context <- get
-  (e', context') <- return $ smallStepper e context
-  put context'
+  e'<- smallStepper e
   if e == e'
     then return e
     else evalBigM smallStepper e'
@@ -67,9 +72,17 @@ evalList smallStepper es context =
     swap $ L.mapAccumL fnAcc context es 
 -}
 
-evalList smallStepper es = runState $ evalListM smallStepper es
+-- evalList smallStepper es = runState $ evalListM (state . smallStepper) es
+evalList smallStepper es = 
+  let 
+    smallStepperM = lift .  state . smallStepper
+    evalList' es = runState . runExceptT $ evalListM smallStepperM es
+  in
+    applyToFirst (fromRight es) . evalList' es
 
-evalListM :: (Expression -> Context -> (Expression, Context))
+evalListM :: (Expression -> Eval Expression)
           -> [Expression]
           -> Eval [Expression]
-evalListM smallStepper es = mapM (evalBigM smallStepper) es
+-- evalListM smallStepperM es = mapM (evalBigM smallStepperM) es
+evalListM = mapM . evalBigM
+

@@ -4,6 +4,9 @@ import Syntax.Expression
 import Evaluation.Substitution
 import qualified Data.Map as M
 import Control.Monad.State
+import Control.Monad.Except
+import Control.Monad.Identity
+import Data.Either
 
 
 {-|
@@ -33,27 +36,33 @@ eval app@(Application e a) context =
   in ((Application evalE a), context)
 -}
 
-
-eval = runState . evalM
-
-type Eval = State Context
+type Eval = ExceptT String (State Context)
 evalM :: Expression -> Eval Expression
 
+evalE :: Expression -> Context -> (Either String Expression, Context)
+evalE e = runState $ runExceptT (evalM e)
+eval e = applyToFirst (fromRight e) . evalE e 
+
+applyToFirst :: (a -> b) -> (a, c) -> (b, c)
+applyToFirst f (x, y) = (f x, y)
+
+
 evalM def@(Definition name e) = do
-  context <- get
   modify $ M.insert name e
-  return e
+  lift $ return e
 
 evalM var@(Var x) = do
-  evalX <- gets $ M.findWithDefault var x
-  return evalX
+  context <- get
+  case M.lookup x context of
+    Just e -> lift $ return e
+    Nothing -> throwError $ "error. variable " ++ (show x) ++ "not found"
 
-evalM lambda@(Lambda x e) = return lambda
+evalM lambda@(Lambda x e) = lift $ return lambda
 
 evalM (Application lambdaE@(Lambda x e) a) = case a of
-  Lambda x' e' -> return (subst x a e)
-  _ -> evalM a >>= return . Application lambdaE
+  Lambda x' e' -> lift $ return (subst x a e)
+  _ -> evalM a >>= lift . return . Application lambdaE
     
 evalM (Application e a) = do
   evalE <- evalM e 
-  return (Application evalE a)
+  lift $ return (Application evalE a)

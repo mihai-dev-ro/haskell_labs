@@ -4,6 +4,9 @@ import Syntax.Expression
 import Evaluation.Substitution
 import qualified Data.Map as M
 import Control.Monad.State
+import Control.Monad.Except
+import Control.Monad.Identity
+import Data.Either
 
 {-|
   Small-step normal-order evaluation of a given expression,
@@ -26,24 +29,52 @@ eval app@(Application e a) context = case e of
                                    in ((Application evalVar a), context)
 -}
 
-eval = runState . evalM
 
-type Eval = State Context
+
+
+{- 
+  Solution 1. Where Exception is treated outside of State 
+  ------------------------------------------------------------------
+
+type Eval = StateT Context (Except String)
 evalM :: Expression -> Eval Expression
 
+evalE :: Expression -> Context -> Either String (Expression, Context)
+evalE e = runExcept . runStateT (evalM e) 
+eval e context = fromRight (e, context) (evalE e context)
+-}
+
+
+{- 
+  Solution 2. Where State is dealing with exception-aware expressions
+  ------------------------------------------------------------------- 
+-}
+
+type Eval = ExceptT String (State Context)
+evalM :: Expression -> Eval Expression
+
+evalE :: Expression -> Context -> (Either String Expression, Context)
+evalE e = runState $ runExceptT (evalM e)
+eval e = applyToFirst (fromRight e) . evalE e 
+
+applyToFirst :: (a -> b) -> (a, c) -> (b, c)
+applyToFirst f (x, y) = (f x, y)
+
+
 evalM def@(Definition name e) = do
-  context <- get
   modify $ M.insert name e
-  return e
+  lift $ return e
 
 evalM var@(Var x) = do
-  evalX <- gets $ M.findWithDefault var x
-  return evalX
+  context <- get
+  case M.lookup x context of
+    Just e -> lift $ return e
+    Nothing -> throwError $ "error. variable " ++ (show x) ++ "not found"
 
-evalM lambda@(Lambda x e) = return lambda
+evalM lambda@(Lambda x e) = lift $ return lambda
 
 evalM app@(Application e a) = case e of
-  Lambda x e' -> return (subst x a e')
+  Lambda x e' -> lift $ return (subst x a e')
   _           -> do
     evalVar <- evalM e
-    return (Application evalVar a)  
+    lift $ return (Application evalVar a)  
