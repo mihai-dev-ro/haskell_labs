@@ -14,7 +14,7 @@ import Data.Either
 -}
 eval :: Expression             -- ^ Expression to be evaluated
    -> Context                -- ^ Context where the evaluation takes place
-   -> (Expression, Context)  -- ^ Evaluation result, together with a possibly
+   -> IO (Expression, Context)  -- ^ Evaluation result, together with a possibly
                  --   enriched context, in case of definition
 {-
 eval def@(Definition name e) context = (e, M.insert name e context)
@@ -50,12 +50,15 @@ eval e context = fromRight (e, context) (evalE e context)
   ------------------------------------------------------------------- 
 -}
 
-type Eval = ExceptT String (State Context)
+type Eval = ExceptT String (StateT Context IO)
 evalM :: Expression -> Eval Expression
 
-evalE :: Expression -> Context -> (Either String Expression, Context)
-evalE e = runState $ runExceptT (evalM e)
-eval e = applyToFirst (fromRight e) . evalE e 
+evalE :: Expression -> Context -> IO (Either String Expression, Context)
+evalE e = runStateT . runExceptT $ evalM e
+eval e context =  do 
+                    result <- evalE e context
+                    return $ applyToFirst (fromRight e) result
+
 
 applyToFirst :: (a -> b) -> (a, c) -> (b, c)
 applyToFirst f (x, y) = (f x, y)

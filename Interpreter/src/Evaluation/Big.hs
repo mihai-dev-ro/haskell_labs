@@ -18,10 +18,10 @@ import Control.Monad.Except
     
     The first argument is the small-step evaluation function.
 -}
-evalBig :: (Expression -> Context -> (Expression, Context))  -- ^ Small-stepper
+evalBig :: (Expression -> Context -> IO (Expression, Context))  -- ^ Small-stepper
         -> Expression             -- ^ Expression to be evaluated
         -> Context                -- ^ Context where the evaluation takes place
-        -> (Expression, Context)  -- ^ Evaluation result,
+        -> IO (Expression, Context)  -- ^ Evaluation result,
                                   --   together with a possibly enriched context
                                   --   in case of definition
 
@@ -35,12 +35,11 @@ evalBig smallStepper e context =
       else evalBig smallStepper e' context 
 -}
 
-evalBig smallStepper e = 
-  let 
-    smallStepperM = lift . state . smallStepper
-    evalBig' e = runState $ runExceptT (evalBigM smallStepperM e)
-  in
-    applyToFirst (fromRight e) . evalBig' e
+evalBig smallStepper e context = 
+  let smallStepperM e = lift . StateT $ smallStepper e
+  in do
+    result <- runStateT (runExceptT $ evalBigM smallStepperM e) context
+    return $ applyToFirst (fromRight e) result
 
 evalBigM :: (Expression -> Eval Expression)
          -> Expression
@@ -59,10 +58,10 @@ evalBigM smallStepper e = do
     
     The first argument is the small-step evaluation function.
 -}
-evalList :: (Expression -> Context -> (Expression, Context))
+evalList :: (Expression -> Context -> IO (Expression, Context))
          -> [Expression]
          -> Context
-         -> ([Expression], Context)
+         -> IO ([Expression], Context)
 
 {-}
 evalList smallStepper es context = 
@@ -72,13 +71,11 @@ evalList smallStepper es context =
     swap $ L.mapAccumL fnAcc context es 
 -}
 
--- evalList smallStepper es = runState $ evalListM (state . smallStepper) es
-evalList smallStepper es = 
-  let 
-    smallStepperM = lift .  state . smallStepper
-    evalList' es = runState . runExceptT $ evalListM smallStepperM es
-  in
-    applyToFirst (fromRight es) . evalList' es
+evalList smallStepper es context = 
+  let smallStepperM e = lift . StateT $ smallStepper e 
+  in do 
+    result <- runStateT (runExceptT $ evalListM smallStepperM es) context
+    return $ applyToFirst (fromRight es) result
 
 evalListM :: (Expression -> Eval Expression)
           -> [Expression]
