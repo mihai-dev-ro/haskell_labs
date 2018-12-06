@@ -6,6 +6,7 @@ import qualified Data.Map as M
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Identity
+import Control.Arrow
 import Data.Either
 
 
@@ -43,28 +44,24 @@ evalE :: Expression -> Context -> IO (Either String Expression, Context)
 evalE e = runStateT . runExceptT $ evalM e
 eval e context = do 
                   result <- evalE e context 
-                  return $ applyToFirst (fromRight e) result 
-
-applyToFirst :: (a -> b) -> (a, c) -> (b, c)
-applyToFirst f (x, y) = (f x, y)
-
+                  return $ first (fromRight e) result 
 
 evalM def@(Definition name e) = do
   modify $ M.insert name e
-  lift $ return e
+  return e
 
 evalM var@(Var x) = do
   context <- get
   case M.lookup x context of
-    Just e -> lift $ return e
+    Just e -> return e
     Nothing -> throwError $ "error. variable " ++ (show x) ++ "not found"
 
 evalM lambda@(Lambda x e) = lift $ return lambda
 
 evalM (Application lambdaE@(Lambda x e) a) = case a of
-  Lambda x' e' -> lift $ return (subst x a e)
-  _ -> evalM a >>= lift . return . Application lambdaE
+  Lambda x' e' -> return (subst x a e)
+  _ -> evalM a >>= return . Application lambdaE
     
 evalM (Application e a) = do
   evalE <- evalM e 
-  lift $ return (Application evalE a)
+  return (Application evalE a)

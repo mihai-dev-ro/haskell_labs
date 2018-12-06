@@ -6,7 +6,9 @@ import qualified Data.Map as M
 import Control.Monad.State
 import Control.Monad.Except
 import Control.Monad.Identity
+import Control.Arrow (first)
 import Data.Either
+
 
 {-|
   Small-step normal-order evaluation of a given expression,
@@ -57,27 +59,32 @@ evalE :: Expression -> Context -> IO (Either String Expression, Context)
 evalE e = runStateT . runExceptT $ evalM e
 eval e context =  do 
                     result <- evalE e context
-                    return $ applyToFirst (fromRight e) result
-
-
-applyToFirst :: (a -> b) -> (a, c) -> (b, c)
-applyToFirst f (x, y) = (f x, y)
+                    return $ first (fromRight e) result
 
 
 evalM def@(Definition name e) = do
   modify $ M.insert name e
-  lift $ return e
+  return e
 
 evalM var@(Var x) = do
   context <- get
   case M.lookup x context of
-    Just e -> lift $ return e
-    Nothing -> throwError $ "error. variable " ++ (show x) ++ "not found"
+    Just e -> return e
+    Nothing -> do
+      let err = "error. variable " ++ (show x) ++ " not found" 
+      liftIO $ putStrLn err
+      throwError $ err
 
 evalM lambda@(Lambda x e) = lift $ return lambda
 
 evalM app@(Application e a) = case e of
-  Lambda x e' -> lift $ return (subst x a e')
+  Lambda x e' -> return (subst x a e')
   _           -> do
     evalVar <- evalM e
-    lift $ return (Application evalVar a)  
+    return (Application evalVar a)  
+
+
+{- 
+  TEST:
+  eval (Var "id") (Data.Map.fromList [("id", Lambda "x" (Var "x"))])
+-}
