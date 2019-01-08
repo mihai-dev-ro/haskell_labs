@@ -6,6 +6,7 @@ import qualified Data.List as L
 import Evaluation.Normal
 import Data.Tuple
 import Data.Either
+import Control.Arrow (first)
 
 import Control.Monad.State
 import Control.Monad.Identity
@@ -39,7 +40,7 @@ evalBig smallStepper e context =
   let smallStepperM e = lift . StateT $ smallStepper e
   in do
     result <- runStateT (runExceptT $ evalBigM smallStepperM e) context
-    return $ applyToFirst (fromRight e) result
+    return $ first (fromRight e) result
 
 evalBigM :: (Expression -> Eval Expression)
          -> Expression
@@ -75,7 +76,7 @@ evalList smallStepper es context =
   let smallStepperM e = lift . StateT $ smallStepper e 
   in do 
     result <- runStateT (runExceptT $ evalListM smallStepperM es) context
-    return $ applyToFirst (fromRight es) result
+    return $ first (fromRight es) result
 
 evalListM :: (Expression -> Eval Expression)
           -> [Expression]
