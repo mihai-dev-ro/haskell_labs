@@ -12,8 +12,7 @@ import {-@ HTF_TESTS @-} Evaluation.BigTest
 
 import {-@ HTF_TESTS @-} Typing.TypeTest
 import {-@ HTF_TESTS @-} Typing.UnificationTest
-{-
 import {-@ HTF_TESTS @-} Typing.InferenceTest
--}
+
 main :: IO ()
 main = htfMain htf_importedTests

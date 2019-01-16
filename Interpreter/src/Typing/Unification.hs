@@ -92,12 +92,11 @@ unify t1 t2 = do
     t2' <- chainEnd t2
     unifyBase t1' t2'
 
-unifyBase tv1@(TypeVar v1) tv2@(TypeVar v2) = do
+unifyBase tv1@(TypeVar v1) tv2@(TypeVar v2) =
     if v1 == v2 
     then return ()
-    else do 
-        modify $ M.insert v1 tv2
-        return ()         
+    else 
+        modify $ M.insert v1 tv2         
 
 unifyBase tv1@(TypeVar v1) ta2@(Arrow t1 t2) = do
     tv1occ <- occCheck v1 ta2
@@ -112,7 +111,6 @@ unifyBase tv1@(TypeVar v1) ta2@(Arrow t1 t2) = do
 unifyBase ta1@(Arrow t1 t2) ta2@(Arrow t1' t2') = do
     unify t1 t1'
     unify t2 t2'
-    return ()
 
 unifyBase ta1@(Arrow t1 t2) tv2@(TypeVar v2) = unify tv2 ta1
 
